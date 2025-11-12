@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Today Stats — MuDaSiR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="logo-wrap"><!-- logo --></div>
+        <div><div class="brand-name">MuDaSiR</div><div class="brand-sub">Today Stats</div></div>
+      </div>
+      <nav class="main-nav"><a href="/" class="btn ghost">Home</a></nav>
+    </div>
+  </header>
+
+  <main style="padding-top:100px">
+    <div class="container">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3>Live Today Stats</h3>
+          <div>
+            <button id="refreshBtn" class="btn slim">Refresh</button>
+            <button id="autoBtn" class="btn slim">Auto: Off</button>
+          </div>
+        </div>
+        <p style="color:var(--muted)">Click Refresh to fetch live counts from upstream. Uses your configured upstream and login credentials.</p>
+        <div id="statsArea" style="margin-top:12px" class="log">No data yet.</div>
+      </div>
+    </div>
+  </main>
+
+<script>
+let auto = false, autoTimer = null;
+async function fetchToday(){
+  const area = document.getElementById('statsArea'); area.textContent = 'Loading...';
+  try {
+    const res = await fetch('/api/today'); const data = await res.json();
+    if (data.error) { area.textContent = 'Error: ' + (data.msg || data.error); return; }
+    const counts = data.counts || {};
+    let out = '';
+    const clients = Object.keys(counts).sort((a,b)=>a.localeCompare(b));
+    if (clients.length === 0) out = 'No rows parsed.';
+    else {
+      out += '<table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--muted)"><th>Client</th><th>TO BE PAID</th><th>NOT TO BE PAID</th></tr></thead><tbody>';
+      clients.forEach(c => {
+        const v = counts[c];
+        out += '<tr><td style="padding:6px 4px">'+c+'</td><td style="padding:6px 4px">'+(v["TO BE PAID"]||0)+'</td><td style="padding:6px 4px">'+(v["NOT TO BE PAID"]||0)+'</td></tr>';
+      });
+      out += '</tbody></table>';
+      out += '<div style="margin-top:12px;color:var(--muted)">Grand totals — TO BE PAID: '+(data.grand["TO BE PAID"]||0)+'  •  NOT TO BE PAID: '+(data.grand["NOT TO BE PAID"]||0)+'</div>';
+    }
+    area.innerHTML = out;
+  } catch(e){ area.textContent = 'Fetch failed: ' + e.message; }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', fetchToday);
+document.getElementById('autoBtn').addEventListener('click', ()=>{
+  auto = !auto; document.getElementById('autoBtn').textContent = 'Auto: ' + (auto? 'On' : 'Off');
+  if(auto){ autoTimer = setInterval(fetchToday, 3000); } else { clearInterval(autoTimer); autoTimer = null; }
+});
+
+// initial
+window.addEventListener('load', fetchToday);
+</script>
+</body>
+</html>

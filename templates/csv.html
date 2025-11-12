@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CSV Upload — MuDaSiR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="logo-wrap"><!-- same logo --></div>
+        <div><div class="brand-name">MuDaSiR</div><div class="brand-sub">CSV Upload</div></div>
+      </div>
+      <nav class="main-nav"><a href="/" class="btn ghost">Home</a></nav>
+    </div>
+  </header>
+
+  <main style="padding-top:100px">
+    <div class="container">
+      <div class="panel">
+        <h3>Bulk CSV Upload</h3>
+        <p style="color:var(--muted);font-size:13px">CSV columns: <code>client_external_id,selrng,quantity</code></p>
+        <div class="row">
+          <input id="csvFile" type="file" accept=".csv" />
+          <button id="uploadBtn" class="btn slim">Upload & Run</button>
+        </div>
+        <div id="uploadResult" class="log" style="margin-top:10px">No uploads yet.</div>
+      </div>
+    </div>
+  </main>
+
+<script>
+document.getElementById('uploadBtn').addEventListener('click', async ()=>{
+  const fileEl = document.getElementById('csvFile'), display = document.getElementById('uploadResult');
+  if(!fileEl.files || !fileEl.files[0]) { alert('Choose CSV file first'); return; }
+  display.textContent = 'Uploading...';
+  const form = new FormData(); form.append('file', fileEl.files[0], fileEl.files[0].name);
+  try {
+    const res = await fetch('/api/upload', { method:'POST', body: form });
+    const data = await res.json();
+    if (data.error) { display.textContent = 'Upload error: ' + (data.msg || data.error); return; }
+    let ok = 0, fail = 0, skip = 0;
+    (data.results || []).forEach(r => { if (r.status === 'success') ok++; else if (r.status === 'skipped') skip++; else fail++; });
+    display.textContent = `Processed ${data.processed}: success=${ok}, failed=${fail}, skipped=${skip}`;
+  } catch(e){ display.textContent = 'Upload failed: ' + e.message; }
+});
+</script>
+</body>
+</html>

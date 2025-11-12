@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>SMS Allocator — Powdered By MuDaSiR</title>
-
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css" />
 </head>
@@ -26,7 +25,13 @@
       </div>
 
       <nav class="main-nav">
-        <button id="menuBtn" class="menu-btn">Menu ☰</button>
+        <!-- Menu with links -->
+        <select id="menuSelect" class="select" style="width:180px;padding:8px;border-radius:8px;background:var(--glass);color:inherit">
+          <option value="">Menu ▾</option>
+          <option value="/csv">CSV Upload</option>
+          <option value="/today">Today Stats</option>
+          <option value="#history">History (on page)</option>
+        </select>
       </nav>
     </div>
   </header>
@@ -42,7 +47,6 @@
           <button id="startBtn" class="btn primary">Numbers Allocate</button>
           <a href="#controls" class="btn ghost">More Features</a>
         </div>
-
       </div>
     </section>
 
@@ -65,16 +69,6 @@
           <button id="dryRunBtn" class="btn ghost">Dry Run</button>
         </div>
 
-        <hr style="margin:18px 0;border-color:rgba(255,255,255,0.03)">
-
-        <h3>Bulk CSV Upload</h3>
-        <p style="color:var(--muted);font-size:13px;margin-top:6px">CSV columns: <code>client_external_id,selrng,quantity</code></p>
-        <div class="row">
-          <input id="csvFile" type="file" accept=".csv" />
-          <button id="uploadBtn" class="btn slim">Upload & Run</button>
-        </div>
-        <div id="uploadResult" class="log" style="margin-top:10px">No uploads yet.</div>
-
         <div class="log" id="log" style="margin-top:12px">Log will appear here...</div>
       </div>
 
@@ -84,7 +78,6 @@
           <button id="refreshHistory" class="small">Refresh</button>
         </div>
 
-        <!-- ADDED stats element (fix for JS error) -->
         <div id="stats" style="color:var(--muted);margin-top:8px;font-size:13px">No stats yet.</div>
 
         <div id="historyWrap" style="margin-top:10px;max-height:420px;overflow:auto">
@@ -111,10 +104,21 @@
   </footer>
 
 <script>
-// Helpers
-function shortClientName(fullText) { return (fullText||'').split(' [')[0]; }
+// Basic UI logic (menu navigation + re-used functions)
+// Menu navigation
+document.getElementById('menuSelect').addEventListener('change', function(){
+  const v = this.value;
+  if(!v) return;
+  if(v.startsWith('#')) {
+    const el = document.querySelector(v);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  } else {
+    window.location.href = v;
+  }
+});
 
-// Fetch clients
+// Reuse client/range/history JS from earlier (keep functions)
+function shortClientName(fullText) { return (fullText||'').split(' [')[0]; }
 async function fetchClients(){
   const sel = document.getElementById('clients'); sel.innerHTML = '<option>Loading...</option>';
   try {
@@ -124,7 +128,11 @@ async function fetchClients(){
   } catch(e) { sel.innerHTML = '<option>Error</option>'; document.getElementById('log').textContent += 'Fetch clients failed: '+e.message+'\\n'; }
 }
 
-// Load ranges (with guard checks)
+document.getElementById('startBtn').addEventListener('click', ()=> {
+  window.scrollTo({top: document.getElementById('controls').offsetTop - 20, behavior: 'smooth'});
+  fetchClients();
+});
+
 document.getElementById('loadRangesBtn').addEventListener('click', async ()=>{
   const selectEl = document.getElementById('clients'); const clientId = selectEl.value; const clientText = selectEl.options[selectEl.selectedIndex]?.text || clientId;
   const ranges = document.getElementById('ranges'); if (!ranges) return;
@@ -134,16 +142,13 @@ document.getElementById('loadRangesBtn').addEventListener('click', async ()=>{
     const res = await fetch('/api/ranges/' + encodeURIComponent(clientId)); const data = await res.json();
     ranges.innerHTML = ''; if (data.error){ document.getElementById('log').textContent += 'Ranges error: '+(data.msg||data.error)+'\\n'; return; }
     data.forEach(r => { const opt = document.createElement('option'); opt.value = r.selrng; opt.text = r.text + ' (Free:' + r.free + ') ' + (r.allocatable ? '' : '[LOCKED]'); ranges.appendChild(opt); });
-    // update stats only if element exists
-    const statsEl = document.getElementById('stats');
-    if (statsEl) statsEl.innerHTML = '<strong>Ranges loaded:</strong> ' + data.length + '<br/><small>Client: ' + shortClientName(clientText) + '</small>';
+    const statsEl = document.getElementById('stats'); if (statsEl) statsEl.innerHTML = '<strong>Ranges loaded:</strong> ' + data.length + '<br/><small>Client: ' + shortClientName(clientText) + '</small>';
   }catch(e){
     ranges.innerHTML = '<option>Error</option>';
     document.getElementById('log').textContent += 'Fetch ranges failed: ' + e.message + '\\n';
   }
 });
 
-// Allocate single
 document.getElementById('allocBtn').addEventListener('click', async ()=>{
   const clientSel = document.getElementById('clients'); const clientId = clientSel.value; const clientText = clientSel.options[clientSel.selectedIndex]?.text || clientId; const clientShort = shortClientName(clientText);
   const range = document.getElementById('ranges').value; const qty = parseInt(document.getElementById('qty').value || '0', 10); const log = document.getElementById('log');
@@ -160,33 +165,13 @@ document.getElementById('allocBtn').addEventListener('click', async ()=>{
   } catch(err){ log.textContent += `${clientShort} — ${range} — ERROR: ${err.message}\\n\\n`; }
 });
 
-// Dry run
 document.getElementById('dryRunBtn').addEventListener('click', ()=>{
   const clientSel = document.getElementById('clients'); const clientText = clientSel.options[clientSel.selectedIndex]?.text || ''; const clientShort = shortClientName(clientText || 'Client'); const range = document.getElementById('ranges').value; const qty = parseInt(document.getElementById('qty').value || '0', 10);
   if(!clientShort || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
   document.getElementById('log').textContent += `DRY RUN: ${clientShort} — ${range} — ${qty} numbers would be allocated\\n`;
 });
 
-// CSV upload
-document.getElementById('uploadBtn').addEventListener('click', async ()=>{
-  const fileEl = document.getElementById('csvFile');
-  const display = document.getElementById('uploadResult');
-  if (!fileEl.files || !fileEl.files[0]) { alert('Choose CSV file first'); return; }
-  const file = fileEl.files[0];
-  display.textContent = 'Uploading...';
-  const form = new FormData(); form.append('file', file, file.name);
-  try {
-    const res = await fetch('/api/upload', { method:'POST', body: form });
-    const data = await res.json();
-    if (data.error) { display.textContent = 'Upload error: ' + (data.msg || data.error); return; }
-    let ok = 0, fail = 0, skip = 0;
-    (data.results || []).forEach(r => { if (r.status === 'success') ok++; else if (r.status === 'skipped') skip++; else fail++; });
-    display.textContent = `Processed ${data.processed}: success=${ok}, failed=${fail}, skipped=${skip}`;
-    refreshHistory();
-  } catch(e){ display.textContent = 'Upload failed: ' + e.message; }
-});
-
-// History
+// History functions
 async function refreshHistory(){
   const res = await fetch('/api/history'); const rows = await res.json();
   const body = document.getElementById('historyBody'); body.innerHTML = '';
