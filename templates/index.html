@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>SMS Allocator</title>
+  <style>
+    body{font-family:Arial;padding:20px}
+    select, input {padding:6px;margin:6px 0}
+    button{padding:8px 12px;margin-top:8px}
+    pre{background:#f0f0f0;padding:10px}
+  </style>
+</head>
+<body>
+  <h2>SMS Allocator (Simple)</h2>
+
+  <div>
+    <label>Clients:</label><br/>
+    <select id="clients" size="6" style="width:100%;max-width:600px"></select>
+    <button id="loadRanges">Load Ranges for Selected Client</button>
+  </div>
+
+  <div style="margin-top:12px;">
+    <label>Ranges:</label><br/>
+    <select id="ranges" size="6" style="width:100%;max-width:600px"></select>
+  </div>
+
+  <div style="margin-top:12px;">
+    <label>Quantity per client:</label><br/>
+    <input type="number" id="qty" value="1" min="1" />
+    <button id="allocBtn">Allocate</button>
+  </div>
+
+  <div style="margin-top:14px;">
+    <h4>Result / Log</h4>
+    <pre id="log"></pre>
+  </div>
+
+<script>
+async function fetchClients(){
+  const res = await fetch('/api/clients');
+  const data = await res.json();
+  const sel = document.getElementById('clients');
+  sel.innerHTML = '';
+  if (data.error) {
+    document.getElementById('log').textContent += 'Error fetching clients: ' + (data.msg||data.error) + '\\n';
+    return;
+  }
+  data.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.external_id;
+    opt.text = `${c.name} [${c.external_id}]`;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('loadRanges').addEventListener('click', async ()=>{
+  const sel = document.getElementById('clients');
+  const val = sel.value;
+  if(!val){ alert('Select client first'); return; }
+  const res = await fetch(`/api/ranges/${encodeURIComponent(val)}`);
+  const data = await res.json();
+  const rs = document.getElementById('ranges');
+  rs.innerHTML = '';
+  if (data.error) {
+    document.getElementById('log').textContent += 'Error fetching ranges: ' + (data.msg||data.error) + '\\n';
+    return;
+  }
+  data.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.selrng;
+    opt.text = `${r.text} (Free:${r.free}) ${r.allocatable ? '' : '[LOCKED]'}`;
+    rs.appendChild(opt);
+  });
+});
+
+document.getElementById('allocBtn').addEventListener('click', async ()=>{
+  const client = document.getElementById('clients').value;
+  const range = document.getElementById('ranges').value;
+  const qty = parseInt(document.getElementById('qty').value || '0', 10);
+  if(!client || !range || qty <= 0){ alert('Client, Range and positive quantity required'); return; }
+  const log = document.getElementById('log');
+  log.textContent += `Allocating ${qty} to ${client} / ${range}...\\n`;
+  try {
+    const res = await fetch('/api/allocate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({selidd: client, selrng: range, quantity: qty})
+    });
+    const data = await res.json();
+    log.textContent += JSON.stringify(data) + '\\n\\n';
+  } catch(err){
+    log.textContent += 'ERROR: ' + err.message + '\\n\\n';
+  }
+});
+
+window.onload = fetchClients;
+</script>
+
+</body>
+</html>
